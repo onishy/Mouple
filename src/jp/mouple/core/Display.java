@@ -7,7 +7,7 @@ import java.awt.geom.Point2D;
 
 public class Display {
     public Display() {
-    	m_size = Toolkit.getDefaultToolkit().getScreenSize();
+        m_size = Toolkit.getDefaultToolkit().getScreenSize();
     }
 
     public Dimension size() {
