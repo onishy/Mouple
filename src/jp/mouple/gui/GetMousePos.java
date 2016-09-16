@@ -12,6 +12,10 @@ public class GetMousePos implements GetData {
     
     @Override
     public Message func() {
+    	if (!MainWindow.isCapturing()) {
+    		return null;
+    	}
+    	
         Point pt_int = MouseController.getInstance().mousePosition();
         Point2D.Float pt_ratio = 
                 Config.getInstance().getDisplay().toRatio(pt_int);

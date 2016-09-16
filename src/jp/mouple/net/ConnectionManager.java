@@ -19,10 +19,10 @@ public class ConnectionManager {
         MODE_CLIENT,
         MODE_SERVER
     };
-        
+
     private CommThread m_thread;
     private Mode m_mode;
-    
+
     public ConnectionManager(ConnectionInfo info) throws IOException {
         m_mode = Mode.MODE_VOID;
         if (info.mode == Mode.MODE_CLIENT) {
@@ -154,7 +154,9 @@ class ServerObserverThread extends CommThread {
     }
     
     public void sendMessage(Message msg) {
-        
+        for (ServerThread thread : m_thread_list) {
+        	thread.sendMessage(msg);
+        }
     }
 }
 

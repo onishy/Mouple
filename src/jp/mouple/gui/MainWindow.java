@@ -1,18 +1,30 @@
 package jp.mouple.gui;
 
 import java.awt.EventQueue;
+import java.awt.KeyEventDispatcher;
+import java.awt.KeyboardFocusManager;
 
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JRadioButton;
 import javax.swing.JTextField;
+
+import org.jnativehook.GlobalScreen;
+
 import javax.swing.ButtonGroup;
 import javax.swing.JButton;
 import java.awt.event.ActionListener;
+import java.awt.event.KeyEvent;
+import java.awt.event.MouseEvent;
 import java.io.IOException;
+import java.util.logging.Level;
+import java.util.logging.LogManager;
+import java.util.logging.Logger;
 import java.awt.event.ActionEvent;
 
 import jp.mouple.net.*;
+import jp.mouple.net.ConnectionManager.Mode;
+
 import javax.swing.JSpinner;
 import java.awt.Color;
 
@@ -22,6 +34,7 @@ public class MainWindow {
     private static boolean initialized = false;
 
     private JFrame frame;
+    private static JFrame translucent_frame;
     private static JTextField strAddress;
     private static JSpinner portSpinner;
     private static ButtonGroup selectMode = new ButtonGroup();
@@ -41,8 +54,13 @@ public class MainWindow {
         EventQueue.invokeLater(new Runnable() {
             public void run() {
                 try {
-                    window = new MainWindow();
-                    window.frame.setVisible(true);
+                	GlobalScreen.addNativeKeyListener(new GlobalKeyObserver());		
+
+                	window = new MainWindow();
+                    window.frame.setVisible(true);                    
+                    translucent_frame = new TranslucentWindow();
+                    
+                    new GlobalKeyObserver();
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
@@ -162,8 +180,29 @@ public class MainWindow {
         lblErr.setBounds(16, 199, 365, 16);
         frame.getContentPane().add(lblErr);
         
+//        KeyboardFocusManager manager = KeyboardFocusManager.getCurrentKeyboardFocusManager();
+//        manager.addKeyEventDispatcher(new CommandDispatcher());
+        
         initialized = true;
     }
+
+//    private class CommandDispatcher implements KeyEventDispatcher {
+//        @Override
+//        public boolean dispatchKeyEvent(KeyEvent e) {
+//        	if (e.getKeyCode() == KeyEvent.VK_META) {
+//	            if (e.getID() == KeyEvent.KEY_PRESSED) {
+//	                System.out.println("Pressed");
+//	                showClickCapturer();
+//	            } else if (e.getID() == KeyEvent.KEY_RELEASED) {
+//	                System.out.println("Released");
+//	                hideClickCapturer();
+//	            } else if (e.getID() == KeyEvent.KEY_TYPED) {
+//	                System.out.println("Typed");
+//	            }
+//        	}
+//            return false;
+//        }
+//    }
     
     private void setEnabledAll(boolean value) {
         if (!initialized) return;
@@ -183,5 +222,27 @@ public class MainWindow {
     public static void setErr(String msg) {
         if (!initialized) return;
         lblErr.setText(msg);
+    }
+    
+    public static void showClickCapturer() {
+    	translucent_frame.setVisible(true);
+    }
+
+    public static void hideClickCapturer() {
+    	translucent_frame.setVisible(false);
+    }
+    
+    public static boolean isCapturing() {
+    	return translucent_frame.isVisible();
+    }
+
+    public static void notifyClick(MouseEvent e) {
+    	System.out.println("clicked!");
+    	if (connectionManager != null && connectionManager.getMode() == Mode.MODE_SERVER) {
+    		Message click_msg = new Message(Message.Type.c);
+    		click_msg.data = new String[1];
+    		click_msg.data[0] = "" + e.getButton();
+    		connectionManager.sendMessage(click_msg);
+    	}
     }
 }
