@@ -5,12 +5,13 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.*;
+import java.util.Collections;
 import java.util.LinkedList;
 
 import jp.mouple.core.*;
 import jp.mouple.gui.GetMousePos;
 import jp.mouple.gui.MainWindow;
-import jp.mouple.gui.MoveMousePos;
+import jp.mouple.gui.InterpretMessage;
 
 public class ConnectionManager {
 	public enum Mode {
@@ -19,7 +20,7 @@ public class ConnectionManager {
 		MODE_SERVER
 	};
 		
-	private StoppableThread m_thread;
+	private CommThread m_thread;
 	private Mode m_mode;
 	
 	public ConnectionManager(ConnectionInfo info) throws IOException {
@@ -39,7 +40,7 @@ public class ConnectionManager {
 					socket.close();
 					return;
 				}
-				m_thread = new ClientThread(socket, new MoveMousePos());
+				m_thread = new ClientThread(socket, new InterpretMessage());
 				m_thread.start();
 			} catch (IOException ex) {
 				throw ex;
@@ -77,16 +78,30 @@ public class ConnectionManager {
 		m_thread = null;
 	}
 	
+	public void sendMessage(Message msg) {
+		if (m_mode == Mode.MODE_SERVER) {
+			((ServerObserverThread)m_thread).sendMessage(msg);
+		}
+	}
+	
 	public Mode getMode() {
 		return m_mode;
 	}
+	
+	public static String getIp() throws SocketException {
+	    return Collections.list(NetworkInterface.getNetworkInterfaces()).stream()
+	            .flatMap(i -> Collections.list(i.getInetAddresses()).stream())
+	            .filter(ip -> ip instanceof Inet4Address && ip.isSiteLocalAddress())
+	            .findFirst().orElseThrow(RuntimeException::new)
+	            .getHostAddress();
+	}
 };
 
-abstract class StoppableThread extends Thread {
+abstract class CommThread extends Thread {
 	public abstract void shutdown();
 }
 
-class ServerObserverThread extends StoppableThread {
+class ServerObserverThread extends CommThread {
 	private volatile boolean m_done_flag = false;
 	ServerSocket m_socket;
 	LinkedList<ServerThread> m_thread_list = new LinkedList<ServerThread>();
@@ -95,9 +110,9 @@ class ServerObserverThread extends StoppableThread {
 		m_done_flag = false;
 		m_socket = soc;
 		try {
-			MainWindow.setInfo("Server Started at " + InetAddress.getLocalHost().getHostAddress());
-			System.out.println("Server Started at " + InetAddress.getLocalHost().getHostAddress());
-		} catch (UnknownHostException ex) {
+			MainWindow.setInfo("Server Started at " + ConnectionManager.getIp());
+			System.out.println("Server Started at " + ConnectionManager.getIp());
+		} catch (SocketException ex) {
 			ex.printStackTrace();
 		}
 	}
@@ -110,6 +125,8 @@ class ServerObserverThread extends StoppableThread {
 					ServerThread thread = new ServerThread(socket, new GetMousePos());
 					m_thread_list.add(thread);
 					thread.start();
+				} else {
+					m_done_flag = true;
 				}
 			} catch (IOException ex) {
 				ex.printStackTrace();
@@ -135,12 +152,18 @@ class ServerObserverThread extends StoppableThread {
             ex.printStackTrace();
         }
     }
+	
+	public void sendMessage(Message msg) {
+		
+	}
 }
 
-class ServerThread extends StoppableThread {
+class ServerThread extends CommThread {
 	private volatile boolean m_done_flag = false;
 	private Socket m_socket;
 	private GetData m_gd;
+	
+	private LinkedList<Message> m_msg_buffer = new LinkedList<Message>();
 	
 	public ServerThread (Socket soc, GetData gd) {
 		m_socket = soc;
@@ -168,9 +191,14 @@ class ServerThread extends StoppableThread {
 		while (!m_done_flag) {
 			try {
 				PrintWriter sendout = new PrintWriter(m_socket.getOutputStream(), true);
-				String msg = m_gd.func();
-				if (msg != "") {
-					sendout.println(msg);				
+				
+				for (Message str : m_msg_buffer) {
+					sendout.println(str.toString());
+				}
+				
+				Message msg = m_gd.func();
+				if (msg != null) {
+					sendout.println(msg.toString());
 				}
 			} catch (IOException ex) {
 				ex.printStackTrace();
@@ -195,9 +223,13 @@ class ServerThread extends StoppableThread {
 	public void shutdown() {
 		m_done_flag = true;
 	}
+	
+	public synchronized void sendMessage(Message msg) {
+		m_msg_buffer.add(msg);
+	}
 };
 
-class ClientThread extends StoppableThread {
+class ClientThread extends CommThread {
 	private volatile boolean m_done_flag;
 	private Socket m_socket;
 	private Callback m_cb;
@@ -215,12 +247,26 @@ class ClientThread extends StoppableThread {
 						new BufferedReader(new InputStreamReader(m_socket.getInputStream()));
 				String line;
 				line = reader.readLine();
-				System.out.println("Message from server: " + line);
-				if (line != "") {
-					String[] data = line.trim().split(",");
-					if (data.length > 0) {
-						m_cb.func(data);				
+				if (line != "" && line != null) {
+					System.out.println("Message from server: " + line);
+					
+					String[] msg_str = line.trim().split(":");
+					if (msg_str.length == 0) {
+						System.out.println("Invalid Message.");
+						continue;
 					}
+					
+					Message msg = new Message(Message.Type.valueOf(msg_str[0]));
+					if (msg.getType() == null) {
+						System.out.println("Invalid Message.");
+						continue;						
+					}
+					
+					if (msg_str.length > 1) {
+						String[] data = msg_str[1].trim().split(",");
+						msg.data = data;
+					}
+					m_cb.func(msg);	
 				}
 			} catch (IOException ex) {
 				ex.printStackTrace();

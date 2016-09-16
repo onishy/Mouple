@@ -28,4 +28,8 @@ public class MouseController {
 	public Point mousePosition() {
 		return MouseInfo.getPointerInfo().getLocation();
 	}
+	
+	public void mouseClick(int button) {
+		m_robot.mousePress(button);
+	}
 }
