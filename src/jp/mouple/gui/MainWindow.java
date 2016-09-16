@@ -1,32 +1,31 @@
 package jp.mouple.gui;
 
 import java.awt.EventQueue;
-import java.awt.KeyEventDispatcher;
-import java.awt.KeyboardFocusManager;
 
 import javax.swing.JFrame;
 import javax.swing.JLabel;
-import javax.swing.JRadioButton;
 import javax.swing.JTextField;
+import javax.swing.table.DefaultTableModel;
 
 import org.jnativehook.GlobalScreen;
 
-import javax.swing.ButtonGroup;
 import javax.swing.JButton;
 import java.awt.event.ActionListener;
-import java.awt.event.KeyEvent;
 import java.awt.event.MouseEvent;
 import java.io.IOException;
-import java.util.logging.Level;
-import java.util.logging.LogManager;
-import java.util.logging.Logger;
 import java.awt.event.ActionEvent;
 
+import jp.mouple.core.Def;
 import jp.mouple.net.*;
 import jp.mouple.net.ConnectionManager.Mode;
 
 import javax.swing.JSpinner;
 import java.awt.Color;
+import javax.swing.JTabbedPane;
+import javax.swing.JPanel;
+import javax.swing.JTable;
+import javax.swing.JScrollPane;
+import javax.swing.ScrollPaneConstants;
 
 public class MainWindow {
 
@@ -35,17 +34,19 @@ public class MainWindow {
 
     private JFrame frame;
     private static JFrame translucent_frame;
-    private static JTextField strAddress;
-    private static JSpinner portSpinner;
-    private static ButtonGroup selectMode = new ButtonGroup();
-    private static JRadioButton rdbtnServer;
-    private static JRadioButton rdbtnClient;
-    private static JButton btnConnect;
-    private static JButton btnDisconnect;
-    private static JLabel lblInfo;
+    private static JTabbedPane tabbedPane;
+    private static JTextField strAddressClient;
+    private static JSpinner spinnerPortServer;
+    private static JSpinner spinnerPortClient;
+    private static JButton btnConnectServer;
+    private static JButton btnDisconnectServer;
+    private static JButton btnConnectClient;
+    private static JButton btnDisconnectClient;
     private static JLabel lblErr;
+    private static JLabel lblInfo;
     
     private static ConnectionManager connectionManager = null;
+    private JTable tableClientList;
 
     /**
      * Launch the application.
@@ -80,80 +81,47 @@ public class MainWindow {
      */
     private void initialize() {
         frame = new JFrame();
-        frame.setBounds(100, 100, 450, 300);
+        frame.setBounds(100, 100, 450, 294);
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         frame.getContentPane().setLayout(null);
         
-        JLabel lblRunAs = new JLabel("Run As");
-        lblRunAs.setBounds(6, 6, 61, 16);
-        frame.getContentPane().add(lblRunAs);
+        tabbedPane = new JTabbedPane(JTabbedPane.TOP);
+        tabbedPane.setBounds(6, 6, 438, 214);
+        frame.getContentPane().add(tabbedPane);
         
-        rdbtnServer = new JRadioButton("Server");
-        rdbtnServer.setSelected(true);
-        selectMode.add(rdbtnServer);
-        rdbtnServer.setBounds(16, 34, 141, 23);
-        frame.getContentPane().add(rdbtnServer);
+        JPanel tabServer = new JPanel();
+        tabbedPane.addTab("Server", null, tabServer, null);
+        tabServer.setLayout(null);
         
-        rdbtnClient = new JRadioButton("Client");
-        selectMode.add(rdbtnClient);
-        rdbtnClient.setBounds(16, 70, 141, 23);
-        frame.getContentPane().add(rdbtnClient);
-        
-        portSpinner = new JSpinner();
-        portSpinner.setBounds(247, 32, 74, 28);
-        portSpinner.setValue(8080);
-        portSpinner.setEditor(new JSpinner.NumberEditor(portSpinner, "#"));
-        frame.getContentPane().add(portSpinner);
-
-        strAddress = new JTextField();
-        strAddress.setBounds(247, 68, 134, 28);
-        frame.getContentPane().add(strAddress);
-        strAddress.setColumns(10);
-        
-        JLabel lblPort = new JLabel("Port:");
-        lblPort.setBounds(169, 38, 61, 16);
-        frame.getContentPane().add(lblPort);
-        
-        JLabel lblAddress = new JLabel("Address:");
-        lblAddress.setBounds(169, 74, 61, 16);
-        frame.getContentPane().add(lblAddress);
-        
-        btnConnect = new JButton("Connect");
-        btnConnect.addActionListener(new ActionListener() {
+        btnConnectServer = new JButton("Connect");
+        btnConnectServer.setBounds(169, 133, 115, 29);
+        tabServer.add(btnConnectServer);
+        btnConnectServer.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) {
-                setErr("");
-                ConnectionInfo info = new ConnectionInfo();
-                info.address = strAddress.getText();
-                info.port =  (Integer)(portSpinner.getValue());
+            	setErr("");
+
+            	ConnectionInfo info = new ConnectionInfo();
+                info.address = "";
+                info.port =  (Integer)(spinnerPortServer.getValue());
                 info.timeout = 10000;
-                if (selectMode.getSelection() == rdbtnClient.getModel()) {
-                    info.mode = ConnectionManager.Mode.MODE_CLIENT;
-                    try {
-                        connectionManager = new ConnectionManager(info);
-                    } catch (IOException ex) {
-                        ex.printStackTrace();
-                        setErr(ex.getMessage());
-                        return;
-                    }
-                } else {
-                    info.mode = ConnectionManager.Mode.MODE_SERVER;
-                    try {
-                        connectionManager = new ConnectionManager(info);
-                    } catch (IOException ex) {
-                        ex.printStackTrace();
-                        setErr(ex.getMessage());
-                        return;
-                    }
+                info.mode = ConnectionManager.Mode.MODE_SERVER;
+                try {
+                    connectionManager = new ConnectionManager(info);
+                } catch (IOException ex) {
+                    ex.printStackTrace();
+                    setErr(ex.getMessage());
+                    return;
                 }
                 setEnabledAll(false);
-                btnDisconnect.setEnabled(true);
+                btnDisconnectServer.setEnabled(true);
             }
         });
-        btnConnect.setBounds(204, 243, 117, 29);
-        frame.getContentPane().add(btnConnect);        
         
-        btnDisconnect = new JButton("Disconnect");
-        btnDisconnect.addActionListener(new ActionListener() {
+        btnDisconnectServer = new JButton("Disconnect");
+        btnDisconnectServer.setEnabled(false);
+        btnDisconnectServer.setBounds(296, 133, 115, 29);
+        tabServer.add(btnDisconnectServer);
+        btnDisconnectServer.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent e) {
                 setErr("");
                 if (connectionManager == null) {
@@ -163,22 +131,112 @@ public class MainWindow {
                 connectionManager.clear();
                 connectionManager = null;
                 setEnabledAll(true);
-                btnDisconnect.setEnabled(false);
+                btnDisconnectServer.setEnabled(false);
                 setInfo("Disconnected.");
             }
         });
-        btnDisconnect.setEnabled(false);
-        btnDisconnect.setBounds(327, 243, 117, 29);
-        frame.getContentPane().add(btnDisconnect);
         
-        lblInfo = new JLabel("Select Mode");
-        lblInfo.setBounds(16, 157, 365, 16);
-        frame.getContentPane().add(lblInfo);
+        spinnerPortServer = new JSpinner();
+        spinnerPortServer.setBounds(56, 6, 88, 29);
+        spinnerPortServer.setValue(Def.NetworkDeafult.default_port);
+        spinnerPortServer.setEditor(new JSpinner.NumberEditor(spinnerPortServer, "#"));
+        tabServer.add(spinnerPortServer);
         
+        JLabel lblPort = new JLabel("Port:");
+        lblPort.setBounds(6, 6, 38, 29);
+        tabServer.add(lblPort);
+        
+        String[] columnNames = {"No", "Key", "Name"};
+        DefaultTableModel tableModel = new DefaultTableModel(columnNames, 0);
+        
+        JLabel lblClientList = new JLabel("Client List");
+        lblClientList.setBounds(169, 6, 115, 16);
+        tabServer.add(lblClientList);
+        
+        JScrollPane scrollPane = new JScrollPane();
+        scrollPane.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_ALWAYS);
+        scrollPane.setBounds(169, 28, 229, 93);
+        tabServer.add(scrollPane);
+        tableClientList = new JTable(tableModel);
+        tableClientList.setEnabled(false);
+        scrollPane.setColumnHeaderView(tableClientList);
+        tableClientList.setShowGrid(true);
+
+        JPanel tabClient = new JPanel();
+        tabbedPane.addTab("Client", null, tabClient, null);
+        tabClient.setLayout(null);
+        
+        JLabel lblAddress = new JLabel("Address:");
+        lblAddress.setBounds(6, 11, 55, 16);
+        tabClient.add(lblAddress);
+        
+        strAddressClient = new JTextField();
+        strAddressClient.setBounds(73, 5, 134, 28);
+        strAddressClient.setText(Def.NetworkDeafult.default_ip);
+        tabClient.add(strAddressClient);
+        strAddressClient.setColumns(10);
+        
+        JLabel label = new JLabel("Port:");
+        label.setBounds(6, 51, 29, 16);
+        tabClient.add(label);
+        
+        spinnerPortClient = new JSpinner();
+        spinnerPortClient.setBounds(73, 45, 83, 28);
+        spinnerPortClient.setValue(Def.NetworkDeafult.default_port);
+        spinnerPortClient.setEditor(new JSpinner.NumberEditor(spinnerPortClient, "#"));
+        tabClient.add(spinnerPortClient);
+        
+        btnConnectClient = new JButton("Connect");
+        btnConnectClient.setBounds(169, 133, 115, 29);
+        tabClient.add(btnConnectClient);
+        
+        btnConnectClient.addActionListener(new ActionListener() {
+            public void actionPerformed(ActionEvent e) {
+            	setErr("");
+
+            	ConnectionInfo info = new ConnectionInfo();
+                info.address = strAddressClient.getText();
+                info.port =  (Integer)(spinnerPortClient.getValue());
+                info.timeout = 10000;
+                info.mode = ConnectionManager.Mode.MODE_CLIENT;
+                try {
+                    connectionManager = new ConnectionManager(info);
+                } catch (IOException ex) {
+                    ex.printStackTrace();
+                    setErr(ex.getMessage());
+                    return;
+                }
+                setEnabledAll(false);
+                btnDisconnectClient.setEnabled(true);
+            }
+        });
+        
+        btnDisconnectClient = new JButton("Disconnect");
+        btnDisconnectClient.setEnabled(false);
+        btnDisconnectClient.setBounds(296, 133, 115, 29);
+        tabClient.add(btnDisconnectClient);
+        btnDisconnectClient.addActionListener(new ActionListener() {
+            public void actionPerformed(ActionEvent e) {
+                setErr("");
+                if (connectionManager == null) {
+                    System.out.println("Error: connectionManager is null");
+                    return;
+                }
+                connectionManager.clear();
+                connectionManager = null;
+                setEnabledAll(true);
+                btnDisconnectClient.setEnabled(false);
+                setInfo("Disconnected.");
+            }
+        });        
         lblErr = new JLabel("");
-        lblErr.setForeground(Color.RED);
-        lblErr.setBounds(16, 199, 365, 16);
+        lblErr.setBounds(16, 242, 417, 24);
         frame.getContentPane().add(lblErr);
+        lblErr.setForeground(Color.RED);
+        
+        lblInfo = new JLabel("Status:");
+        lblInfo.setBounds(16, 213, 417, 24);
+        frame.getContentPane().add(lblInfo);
         
 //        KeyboardFocusManager manager = KeyboardFocusManager.getCurrentKeyboardFocusManager();
 //        manager.addKeyEventDispatcher(new CommandDispatcher());
@@ -206,22 +264,28 @@ public class MainWindow {
     
     private void setEnabledAll(boolean value) {
         if (!initialized) return;
-        strAddress.setEnabled(value);
-        portSpinner.setEnabled(value);
-        rdbtnServer.setEnabled(value);
-        rdbtnClient.setEnabled(value);
-        btnConnect.setEnabled(value);
-        btnDisconnect.setEnabled(value);
+        tabbedPane.setEnabled(value);
+        strAddressClient.setEnabled(value);
+        spinnerPortServer.setEnabled(value);
+        spinnerPortClient.setEnabled(value);
+        btnConnectServer.setEnabled(value);
+        btnDisconnectServer.setEnabled(value);
+        btnConnectClient.setEnabled(value);
+        btnDisconnectClient.setEnabled(value);
     }
     
     public static void setInfo(String msg) {
         if (!initialized) return;
-        lblInfo.setText(msg);
+        lblInfo.setText("Status: " + msg);        	
     }
     
     public static void setErr(String msg) {
         if (!initialized) return;
-        lblErr.setText(msg);
+        if (msg == "") {
+        	lblErr.setText("");
+        } else {
+            lblErr.setText("Error: " + msg);        	
+        }
     }
     
     public static void showClickCapturer() {
@@ -244,5 +308,5 @@ public class MainWindow {
     		click_msg.data[0] = "" + e.getButton();
     		connectionManager.sendMessage(click_msg);
     	}
-    }
+    }    
 }
