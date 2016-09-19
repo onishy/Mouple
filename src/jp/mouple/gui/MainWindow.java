@@ -1,6 +1,11 @@
 package jp.mouple.gui;
 
 import java.awt.EventQueue;
+import java.awt.Image;
+import java.awt.MenuItem;
+import java.awt.PopupMenu;
+import java.awt.SystemTray;
+import java.awt.TrayIcon;
 
 import javax.swing.JFrame;
 import javax.swing.JLabel;
@@ -9,9 +14,13 @@ import javax.swing.table.DefaultTableModel;
 
 import org.jnativehook.GlobalScreen;
 
+import javax.imageio.ImageIO;
+import javax.swing.ImageIcon;
 import javax.swing.JButton;
 import java.awt.event.ActionListener;
 import java.awt.event.MouseEvent;
+import java.awt.event.MouseWheelEvent;
+import java.awt.geom.Point2D.Float;
 import java.io.IOException;
 import java.awt.event.ActionEvent;
 
@@ -20,6 +29,8 @@ import jp.mouple.net.*;
 import jp.mouple.net.ConnectionManager.Mode;
 
 import javax.swing.JSpinner;
+
+import java.awt.AWTException;
 import java.awt.Color;
 import javax.swing.JTabbedPane;
 import javax.swing.JPanel;
@@ -45,6 +56,11 @@ public class MainWindow {
     private static JLabel lblErr;
     private static JLabel lblInfo;
     
+    private static PopupMenu taskTrayMenu;
+    private static TrayIcon taskTrayIcon;
+    private static MenuItem itemConnectClient;
+    private static MenuItem itemConnectServer;
+    
     private static ConnectionManager connectionManager = null;
     private JTable tableClientList;
 
@@ -58,9 +74,10 @@ public class MainWindow {
                 	GlobalScreen.addNativeKeyListener(new GlobalKeyObserver());		
 
                 	window = new MainWindow();
-                    window.frame.setVisible(true);                    
+                    window.frame.setVisible(true);
                     translucent_frame = new TranslucentWindow();
                     
+                    initializeTaskTray();
                     new GlobalKeyObserver();
                 } catch (Exception e) {
                     e.printStackTrace();
@@ -84,6 +101,8 @@ public class MainWindow {
         frame.setBounds(100, 100, 450, 294);
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         frame.getContentPane().setLayout(null);
+        frame.setIconImage(new ImageIcon("icon.png").getImage());
+        frame.setTitle("Mouple");
         
         tabbedPane = new JTabbedPane(JTabbedPane.TOP);
         tabbedPane.setBounds(6, 6, 438, 214);
@@ -96,45 +115,13 @@ public class MainWindow {
         btnConnectServer = new JButton("Connect");
         btnConnectServer.setBounds(169, 133, 115, 29);
         tabServer.add(btnConnectServer);
-        btnConnectServer.addActionListener(new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-            	setErr("");
-
-            	ConnectionInfo info = new ConnectionInfo();
-                info.address = "";
-                info.port =  (Integer)(spinnerPortServer.getValue());
-                info.timeout = 10000;
-                info.mode = ConnectionManager.Mode.MODE_SERVER;
-                try {
-                    connectionManager = new ConnectionManager(info);
-                } catch (IOException ex) {
-                    ex.printStackTrace();
-                    setErr(ex.getMessage());
-                    return;
-                }
-                setEnabledAll(false);
-                btnDisconnectServer.setEnabled(true);
-            }
-        });
+        btnConnectServer.addActionListener(new ConnectServerActionListener());
         
         btnDisconnectServer = new JButton("Disconnect");
         btnDisconnectServer.setEnabled(false);
         btnDisconnectServer.setBounds(296, 133, 115, 29);
         tabServer.add(btnDisconnectServer);
-        btnDisconnectServer.addActionListener(new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-                setErr("");
-                if (connectionManager == null) {
-                    System.out.println("Error: connectionManager is null");
-                    return;
-                }
-                connectionManager.clear();
-                connectionManager = null;
-                setEnabledAll(true);
-                btnDisconnectServer.setEnabled(false);
-                setInfo("Disconnected.");
-            }
-        });
+        btnDisconnectServer.addActionListener(new DisconnectActionListener());
         
         spinnerPortServer = new JSpinner();
         spinnerPortServer.setBounds(56, 6, 88, 29);
@@ -190,45 +177,13 @@ public class MainWindow {
         btnConnectClient.setBounds(169, 133, 115, 29);
         tabClient.add(btnConnectClient);
         
-        btnConnectClient.addActionListener(new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-            	setErr("");
-
-            	ConnectionInfo info = new ConnectionInfo();
-                info.address = strAddressClient.getText();
-                info.port =  (Integer)(spinnerPortClient.getValue());
-                info.timeout = 10000;
-                info.mode = ConnectionManager.Mode.MODE_CLIENT;
-                try {
-                    connectionManager = new ConnectionManager(info);
-                } catch (IOException ex) {
-                    ex.printStackTrace();
-                    setErr(ex.getMessage());
-                    return;
-                }
-                setEnabledAll(false);
-                btnDisconnectClient.setEnabled(true);
-            }
-        });
+        btnConnectClient.addActionListener(new ConnectClientActionListener());
         
         btnDisconnectClient = new JButton("Disconnect");
         btnDisconnectClient.setEnabled(false);
         btnDisconnectClient.setBounds(296, 133, 115, 29);
         tabClient.add(btnDisconnectClient);
-        btnDisconnectClient.addActionListener(new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-                setErr("");
-                if (connectionManager == null) {
-                    System.out.println("Error: connectionManager is null");
-                    return;
-                }
-                connectionManager.clear();
-                connectionManager = null;
-                setEnabledAll(true);
-                btnDisconnectClient.setEnabled(false);
-                setInfo("Disconnected.");
-            }
-        });        
+        btnDisconnectClient.addActionListener(new DisconnectActionListener());        
         lblErr = new JLabel("");
         lblErr.setBounds(16, 242, 417, 24);
         frame.getContentPane().add(lblErr);
@@ -237,11 +192,44 @@ public class MainWindow {
         lblInfo = new JLabel("Status:");
         lblInfo.setBounds(16, 213, 417, 24);
         frame.getContentPane().add(lblInfo);
-        
+
+        taskTrayMenu = new PopupMenu();
+        itemConnectClient = new MenuItem("Connect as Client");
+        itemConnectClient.addActionListener(new ConnectClientActionListener());
+        taskTrayMenu.add(itemConnectClient);
+        itemConnectServer = new MenuItem("Connect as Server");
+        itemConnectServer.addActionListener(new ConnectServerActionListener());
+        taskTrayMenu.add(itemConnectServer);
+
 //        KeyboardFocusManager manager = KeyboardFocusManager.getCurrentKeyboardFocusManager();
 //        manager.addKeyEventDispatcher(new CommandDispatcher());
         
+        
         initialized = true;
+    }
+    
+    private static void initializeTaskTray() {
+        try {
+	        Image image = ImageIO.read(Thread.currentThread()
+	                .getContextClassLoader()
+	                .getResourceAsStream("icon.png"));
+	        // トレイアイコン生成
+	        taskTrayIcon = new TrayIcon(image);
+	        // イベント登録
+	        taskTrayIcon.addActionListener(new ActionListener() {
+	            @Override
+	            public void actionPerformed(ActionEvent e) {
+	                System.exit(0);
+	            }
+	        });
+	        taskTrayIcon.setPopupMenu(taskTrayMenu);
+	        
+	        SystemTray.getSystemTray().add(taskTrayIcon);
+        } catch (IOException ex) {
+        	ex.printStackTrace();
+        } catch (AWTException ex) {
+        	ex.printStackTrace();
+        }
     }
 
 //    private class CommandDispatcher implements KeyEventDispatcher {
@@ -300,7 +288,7 @@ public class MainWindow {
     	return translucent_frame.isVisible();
     }
 
-    public static void notifyClick(MouseEvent e) {
+    public static void notifyPress(MouseEvent e) {
     	System.out.println("clicked!");
     	if (connectionManager != null && connectionManager.getMode() == Mode.MODE_SERVER) {
     		Message click_msg = new Message(Message.Type.c);
@@ -308,5 +296,96 @@ public class MainWindow {
     		click_msg.data[0] = "" + e.getButton();
     		connectionManager.sendMessage(click_msg);
     	}
-    }    
+    }
+
+    public static void notifyRelease(MouseEvent e) {
+    	System.out.println("released!");
+    	if (connectionManager != null && connectionManager.getMode() == Mode.MODE_SERVER) {
+    		Message release_msg = new Message(Message.Type.r);
+    		release_msg.data = new String[1];
+    		release_msg.data[0] = "" + e.getButton();
+    		connectionManager.sendMessage(release_msg);
+    	}
+    }
+    
+    public static void notifyWheelMove(MouseWheelEvent e) {
+    	System.out.println("wheel!");
+    	if (connectionManager != null && connectionManager.getMode() == Mode.MODE_SERVER) {
+    		Message release_msg = new Message(Message.Type.w);
+    		release_msg.data = new String[1];
+    		release_msg.data[0] = "" + e.getWheelRotation();
+    		connectionManager.sendMessage(release_msg);
+    	}    	
+    }
+
+	public static void notifyMouseMove(Float pt) {
+    	System.out.println("move!");
+    	if (connectionManager != null && connectionManager.getMode() == Mode.MODE_SERVER) {
+    		Message move_msg = new Message(Message.Type.p);
+    		move_msg.data = new String[2];
+    		move_msg.data[0] = "" + pt.x;
+    		move_msg.data[1] = "" + pt.y;
+    		connectionManager.sendMessage(move_msg);
+    	}		
+	}
+    private class ConnectClientActionListener implements ActionListener {
+    	@Override
+    	public void actionPerformed(ActionEvent e) {
+        	setErr("");
+
+        	ConnectionInfo info = new ConnectionInfo();
+            info.address = strAddressClient.getText();
+            info.port =  (Integer)(spinnerPortClient.getValue());
+            info.timeout = 10000;
+            info.mode = ConnectionManager.Mode.MODE_CLIENT;
+            try {
+                connectionManager = new ConnectionManager(info);
+            } catch (IOException ex) {
+                ex.printStackTrace();
+                setErr(ex.getMessage());
+                return;
+            }
+            setEnabledAll(false);
+            btnDisconnectClient.setEnabled(true);
+        }
+    }
+    
+    private class ConnectServerActionListener implements ActionListener {
+    	@Override
+    	public void actionPerformed(ActionEvent e) {
+        	setErr("");
+
+        	ConnectionInfo info = new ConnectionInfo();
+            info.address = "";
+            info.port =  (Integer)(spinnerPortServer.getValue());
+            info.timeout = 10000;
+            info.mode = ConnectionManager.Mode.MODE_SERVER;
+            try {
+                connectionManager = new ConnectionManager(info);
+            } catch (IOException ex) {
+                ex.printStackTrace();
+                setErr(ex.getMessage());
+                return;
+            }
+            setEnabledAll(false);
+            btnDisconnectServer.setEnabled(true);
+        }
+    }
+    
+    private class DisconnectActionListener implements ActionListener {
+		@Override
+		public void actionPerformed(ActionEvent e) {
+            setErr("");
+            if (connectionManager == null) {
+                System.out.println("Error: connectionManager is null");
+                return;
+            }
+            connectionManager.clear();
+            connectionManager = null;
+            setEnabledAll(true);
+            btnDisconnectClient.setEnabled(false);
+            btnDisconnectServer.setEnabled(false);
+            setInfo("Disconnected.");
+        }    	
+    }
 }

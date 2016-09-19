@@ -21,8 +21,13 @@ public class TranslucentWindow extends JFrame {
         setLocationRelativeTo(null);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setAlwaysOnTop(true);
+        setVisible(true);
         
-        addMouseListener(new MouseObserver());
+        MouseObserver observer = new MouseObserver(getSize());
+        addMouseListener(observer);
+        addMouseMotionListener(observer);
+        addMouseWheelListener(observer);
+        setVisible(false);
 
         if (gd.isWindowTranslucencySupported(TRANSLUCENT)) {
             setOpacity(0.3f);

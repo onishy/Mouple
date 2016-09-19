@@ -7,6 +7,8 @@ public class Message {
     public enum Type {
         p, // CursorPos
         c, // Click
+        r, // Release
+        w, // Wheel
         m  // Message
     }
     

@@ -34,7 +34,21 @@ public class InterpretMessage implements Callback {
                 System.out.println("data size is invalid");
             }
             int button = Integer.parseInt(msg.data[0]);
-            MouseController.getInstance().mouseClick(button);
+            MouseController.getInstance().mousePress(button);
+        } else if (msg.getType() == Message.Type.r) {
+            // Release
+            if (msg.data.length != 1) {
+                System.out.println("data size is invalid");
+            }
+            int button = Integer.parseInt(msg.data[0]);
+            MouseController.getInstance().mouseRelease(button);
+        } else if (msg.getType() == Message.Type.w) {
+        	// Wheel
+            if (msg.data.length != 1) {
+                System.out.println("data size is invalid");
+            }
+            int amount = Integer.parseInt(msg.data[0]);
+            MouseController.getInstance().mouseWheel(amount);
         } else if (msg.getType() == Message.Type.m) {
             // Message
         }

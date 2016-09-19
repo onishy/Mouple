@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.*;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedList;
 
@@ -88,10 +89,15 @@ public class ConnectionManager {
         return m_mode;
     }
     
-    public static String getIp() throws SocketException {
-        return Collections.list(NetworkInterface.getNetworkInterfaces()).stream()
-                .flatMap(i -> Collections.list(i.getInetAddresses()).stream())
-                .filter(ip -> ip instanceof Inet4Address && ip.isSiteLocalAddress())
+    public static String getIp() throws SocketException, UnknownHostException {
+    	ArrayList<NetworkInterface> c = Collections.list(NetworkInterface.getNetworkInterfaces());
+    	ArrayList<InetAddress> i_list = new ArrayList<InetAddress>();
+    	i_list.add(InetAddress.getLocalHost());
+    	for (NetworkInterface i : c) {
+    		i_list.addAll(Collections.list(i.getInetAddresses()));
+    	}
+    	return i_list.stream()
+    			.filter(ip -> ip instanceof Inet4Address && ip.isSiteLocalAddress())
                 .findFirst().orElseThrow(RuntimeException::new)
                 .getHostAddress();
     }
@@ -112,7 +118,7 @@ class ServerObserverThread extends CommThread {
         try {
             MainWindow.setInfo("Server Started at " + ConnectionManager.getIp());
             System.out.println("Server Started at " + ConnectionManager.getIp());
-        } catch (SocketException ex) {
+        } catch (SocketException | UnknownHostException ex) {
             ex.printStackTrace();
         }
     }
@@ -194,14 +200,18 @@ class ServerThread extends CommThread {
             try {
                 PrintWriter sendout = new PrintWriter(m_socket.getOutputStream(), true);
                 
-                for (Message str : m_msg_buffer) {
-                    sendout.println(str.toString());
+                synchronized (m_msg_buffer) {
+                	Message msg = m_msg_buffer.pollFirst();
+                	while(msg != null){
+	                    sendout.println(msg.toString());
+	                	msg = m_msg_buffer.pollFirst();
+                	}
                 }
                 
-                Message msg = m_gd.func();
-                if (msg != null) {
-                    sendout.println(msg.toString());
-                }
+//                Message msg = m_gd.func();
+//                if (msg != null) {
+//                    sendout.println(msg.toString());
+//                }
             } catch (IOException ex) {
                 ex.printStackTrace();
                 try {
@@ -222,12 +232,12 @@ class ServerThread extends CommThread {
         }
     }
 
-    public void shutdown() {
+    public synchronized void shutdown() {
         m_done_flag = true;
     }
     
     public synchronized void sendMessage(Message msg) {
-        m_msg_buffer.add(msg);
+        m_msg_buffer.addFirst(msg);
     }
 };
 
@@ -290,7 +300,7 @@ class ClientThread extends CommThread {
         }
     }
     
-    public void shutdown() {
+    public synchronized void shutdown() {
         m_done_flag = true;
     }
 };
