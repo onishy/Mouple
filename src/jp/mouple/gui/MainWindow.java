@@ -15,16 +15,17 @@ import javax.swing.table.DefaultTableModel;
 import org.jnativehook.GlobalScreen;
 
 import javax.imageio.ImageIO;
-import javax.swing.ImageIcon;
 import javax.swing.JButton;
 import java.awt.event.ActionListener;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseWheelEvent;
 import java.awt.geom.Point2D.Float;
 import java.io.IOException;
+import java.util.LinkedList;
 import java.awt.event.ActionEvent;
 
 import jp.mouple.core.Def;
+import jp.mouple.core.User;
 import jp.mouple.net.*;
 import jp.mouple.net.ConnectionManager.Mode;
 
@@ -56,14 +57,16 @@ public class MainWindow {
     private static JLabel lblErr;
     private static JLabel lblInfo;
     
+    private static Image iconImage = null;
     private static PopupMenu taskTrayMenu;
     private static TrayIcon taskTrayIcon;
     private static MenuItem itemConnectClient;
     private static MenuItem itemConnectServer;
     
     private static ConnectionManager connectionManager = null;
-    private JTable tableClientList;
-
+    private static JTable tableClientList;
+    private static DefaultTableModel tableModel;
+    
     /**
      * Launch the application.
      */
@@ -101,8 +104,17 @@ public class MainWindow {
         frame.setBounds(100, 100, 450, 294);
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         frame.getContentPane().setLayout(null);
-        frame.setIconImage(new ImageIcon("icon.png").getImage());
         frame.setTitle("Mouple");
+		try {
+			iconImage = ImageIO.read(Thread.currentThread()
+			        .getContextClassLoader()
+			        .getResourceAsStream("icon.png"));
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		if (iconImage != null) {
+	        frame.setIconImage(iconImage);
+		}
         
         tabbedPane = new JTabbedPane(JTabbedPane.TOP);
         tabbedPane.setBounds(6, 6, 438, 214);
@@ -133,8 +145,8 @@ public class MainWindow {
         lblPort.setBounds(6, 6, 38, 29);
         tabServer.add(lblPort);
         
-        String[] columnNames = {"No", "Key", "Name"};
-        DefaultTableModel tableModel = new DefaultTableModel(columnNames, 0);
+        String[] columnNames = {"No", "Key", "Name", "Address"};
+        tableModel = new DefaultTableModel(columnNames, 0);
         
         JLabel lblClientList = new JLabel("Client List");
         lblClientList.setBounds(169, 6, 115, 16);
@@ -209,27 +221,27 @@ public class MainWindow {
     }
     
     private static void initializeTaskTray() {
-        try {
-	        Image image = ImageIO.read(Thread.currentThread()
-	                .getContextClassLoader()
-	                .getResourceAsStream("icon.png"));
-	        // トレイアイコン生成
-	        taskTrayIcon = new TrayIcon(image);
-	        // イベント登録
-	        taskTrayIcon.addActionListener(new ActionListener() {
-	            @Override
-	            public void actionPerformed(ActionEvent e) {
-	                System.exit(0);
-	            }
-	        });
-	        taskTrayIcon.setPopupMenu(taskTrayMenu);
-	        
-	        SystemTray.getSystemTray().add(taskTrayIcon);
-        } catch (IOException ex) {
-        	ex.printStackTrace();
-        } catch (AWTException ex) {
-        	ex.printStackTrace();
-        }
+        // トレイアイコン生成
+    	if (iconImage != null) {
+    		taskTrayIcon = new TrayIcon(iconImage);
+            // イベント登録
+            taskTrayIcon.addActionListener(new ActionListener() {
+                @Override
+                public void actionPerformed(ActionEvent e) {
+                    System.exit(0);
+                }
+            });
+            taskTrayIcon.setPopupMenu(taskTrayMenu);
+            taskTrayIcon.setImageAutoSize(true);
+            
+            try {
+				SystemTray.getSystemTray().add(taskTrayIcon);
+			} catch (AWTException ex) {
+				// TODO Auto-generated catch block
+				ex.printStackTrace();
+			}
+    	}
+
     }
 
 //    private class CommandDispatcher implements KeyEventDispatcher {
@@ -328,6 +340,19 @@ public class MainWindow {
     		connectionManager.sendMessage(move_msg);
     	}		
 	}
+	
+	public static void updateClientList(){
+		tableClientList.removeAll();
+		
+		LinkedList<User> users = User.getUsers();
+		int cnt = 0;
+		for (User u : users) {
+			String[] rawdata = {Integer.toString(cnt), u.getName(), GlobalKeyObserver.getText(u.getKey()), u.getAddress()};
+			tableModel.addRow(rawdata);
+			cnt++;
+		}
+	}
+	
     private class ConnectClientActionListener implements ActionListener {
     	@Override
     	public void actionPerformed(ActionEvent e) {

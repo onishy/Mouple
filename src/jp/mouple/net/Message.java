@@ -1,10 +1,14 @@
 package jp.mouple.net;
 
-public class Message {
-    private Type m_type;
+import java.io.Serializable;
+
+public class Message implements Serializable {
+	private static final long serialVersionUID = 1L;
+	private Type m_type;
     public String[] data;
     
     public enum Type {
+    	i, // initial data
         p, // CursorPos
         c, // Click
         r, // Release
