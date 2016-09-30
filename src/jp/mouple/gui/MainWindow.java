@@ -25,7 +25,6 @@ import java.util.LinkedList;
 import java.awt.event.ActionEvent;
 
 import jp.mouple.core.Def;
-import jp.mouple.core.User;
 import jp.mouple.net.*;
 import jp.mouple.net.ConnectionManager.Mode;
 
@@ -347,7 +346,7 @@ public class MainWindow {
 		LinkedList<User> users = User.getUsers();
 		int cnt = 0;
 		for (User u : users) {
-			String[] rawdata = {Integer.toString(cnt), u.getName(), GlobalKeyObserver.getText(u.getKey()), u.getAddress()};
+			String[] rawdata = {Integer.toString(cnt), u.getName(), u.getKey().getText(), u.getAddress()};
 			tableModel.addRow(rawdata);
 			cnt++;
 		}

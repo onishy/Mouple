@@ -10,7 +10,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 
 import jp.mouple.core.*;
-import jp.mouple.gui.GetMousePos;
 import jp.mouple.gui.MainWindow;
 import jp.mouple.gui.InterpretMessage;
 
@@ -89,20 +88,37 @@ public class ConnectionManager {
         return m_mode;
     }
     
-    public static String getIp() throws SocketException, UnknownHostException {
+    public static InetAddress getIp() throws SocketException, UnknownHostException {
     	ArrayList<NetworkInterface> c = Collections.list(NetworkInterface.getNetworkInterfaces());
-    	ArrayList<InetAddress> i_list = new ArrayList<InetAddress>();
-    	i_list.add(InetAddress.getLocalHost());
-    	for (NetworkInterface i : c) {
-//    		for (InetAddress ia : Collections.list(i.getInetAddresses())) {
-//    			System.out.println(ia.getHostAddress());
-//    		}
-    		i_list.addAll(Collections.list(i.getInetAddresses()));
+    	InetAddress localia = InetAddress.getLocalHost();
+
+    	ArrayList<InetAddress> internal_inet_list = new ArrayList<InetAddress>();
+    	if (localia instanceof Inet4Address && localia.isSiteLocalAddress()) {
+    		if (!localia.isLoopbackAddress()) {
+    			System.out.println("LocalHost is a valid local ip: " + localia.getHostAddress());
+    			return localia;
+    		} else {
+    			internal_inet_list.add(localia);
+    		}
     	}
-    	return i_list.stream()
-    			.filter(ip -> ip instanceof Inet4Address && ip.isSiteLocalAddress())
-                .findFirst().orElseThrow(RuntimeException::new)
-                .getHostAddress();
+    	for (NetworkInterface i : c) {
+    		for (InetAddress ia : Collections.list(i.getInetAddresses())) {
+    			System.out.println(ia.getHostAddress());
+    	    	if (ia instanceof Inet4Address) {
+    	    		if (ia.isSiteLocalAddress() && ia.isLoopbackAddress()) {
+            			System.out.println("hemi:" + ia.getHostAddress());
+    	    			return ia;    	    			
+    	    		} else if (ia.isLoopbackAddress()) {
+    	    			internal_inet_list.add(ia);    	    			
+    	    		}
+    	    	}
+    		}
+    	}
+    	if (internal_inet_list.size() > 0) {
+    		return internal_inet_list.get(0);
+    	} else {
+    		return null;
+    	}
     }
 };
 
@@ -114,10 +130,28 @@ class ServerObserverThread extends CommThread {
         m_done_flag = false;
         m_socket = soc;
         try {
-            MainWindow.setInfo("Server Started at " + ConnectionManager.getIp());
-            System.out.println("Server Started at " + ConnectionManager.getIp());
+        	InetAddress server_ip = ConnectionManager.getIp();
+        	if (server_ip == null) {
+                MainWindow.setInfo("Server started at unknown ip address");
+                System.out.println("Server started at unknown ip address");
+                return;
+        	}
+        	
+        	if (server_ip.isLoopbackAddress()) {
+                MainWindow.setInfo("Server started at " + server_ip.getHostAddress() + " (loopback)");
+                MainWindow.setErr("Could not find external ip address.");
+                System.out.println("Server started at " + server_ip.getHostAddress() + " (loopback)");        		
+        		
+        	} else {
+                MainWindow.setInfo("Server started at " + server_ip.getHostAddress());
+                System.out.println("Server started at " + server_ip.getHostAddress());        		
+        	}
+        	
         } catch (SocketException | UnknownHostException ex) {
             ex.printStackTrace();
+            MainWindow.setErr("Server did not start");
+            System.out.println("Server did not start");
+            m_done_flag = true;
         }
     }
     
@@ -126,7 +160,7 @@ class ServerObserverThread extends CommThread {
             try {
                 Socket socket = m_socket.accept();
                 if (!socket.getInetAddress().equals(InetAddress.getLocalHost())) {
-                    ServerThread thread = new ServerThread(socket, new GetMousePos());
+                    ServerThread thread = new ServerThread(socket);
                     thread.start();
                 } else {
                     m_done_flag = true;
@@ -148,9 +182,7 @@ class ServerObserverThread extends CommThread {
         // 自分自身に接続してacceptを抜ける
         interrupt();
         try {
-            Socket socket = new Socket(m_socket.getInetAddress(), m_socket.getLocalPort());
-//            PrintWriter sendout = new PrintWriter(socket.getOutputStream(), true);
-//            sendout.write("shutdown command");
+            Socket socket = new Socket(ConnectionManager.getIp(), m_socket.getLocalPort());
             socket.close();
         } catch (IOException ex) {
             ex.printStackTrace();

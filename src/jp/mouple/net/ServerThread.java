@@ -8,10 +8,8 @@ import java.io.ObjectOutputStream;
 import java.net.Socket;
 import java.util.LinkedList;
 
-import jp.mouple.core.GetData;
-import jp.mouple.core.User;
-import jp.mouple.gui.GlobalKeyObserver;
 import jp.mouple.gui.MainWindow;
+import jp.mouple.gui.SingleKeyBinder;
 
 public class ServerThread extends CommThread {
     private volatile boolean m_done_flag = false;
@@ -22,7 +20,7 @@ public class ServerThread extends CommThread {
     
     private LinkedList<Message> m_msg_buffer = new LinkedList<Message>();
     
-    public ServerThread (Socket soc, GetData gd) throws IOException, ClassNotFoundException {
+    public ServerThread (Socket soc) throws IOException, ClassNotFoundException {
         m_socket = soc;
     	m_input_stream = new ObjectInputStream(new BufferedInputStream(m_socket.getInputStream()));
     	Message msg = (Message) m_input_stream.readObject();
@@ -30,7 +28,7 @@ public class ServerThread extends CommThread {
         MainWindow.setInfo("New Client at " + soc.getInetAddress());
         System.out.println("New Client at " + soc.getInetAddress());
         
-        m_user = new User(this, msg.data[0], soc.getInetAddress().toString(), GlobalKeyObserver.Key.CMD);
+        m_user = new User(this, msg.data[0], soc.getInetAddress().toString(), SingleKeyBinder.CmdBinder);
     }
     
     @Override
@@ -67,11 +65,6 @@ public class ServerThread extends CommThread {
                 	}
                     m_output_stream.flush();
                 }
-                
-//                Message msg = m_gd.func();
-//                if (msg != null) {
-//                    sendout.println(msg.toString());
-//                }
             } catch (IOException ex) {
                 ex.printStackTrace();
                 try {
